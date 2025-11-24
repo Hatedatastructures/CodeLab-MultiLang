@@ -11,7 +11,7 @@ type Address struct {
 	Country string
 }
 
-// 定义一个动物接口，包含Print、GetCategory、Sleep方法
+// Animal 定义一个动物接口，包含Print、GetCategory、Sleep方法
 type Animal interface {
 	Print()
 	Getcategory() string
