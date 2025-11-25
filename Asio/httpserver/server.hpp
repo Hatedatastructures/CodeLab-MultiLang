@@ -24,13 +24,13 @@ static const std::string INDEX_HTML_PATH = "index.html";
 struct format_time
 {
   static std::string format_print()
-  {
-    return std::format("[{:%Y-%m-%d %H:%M:%S}]", std::chrono::system_clock::now());
+  {   // 加8小时为北京时间
+    return std::format("[{:%Y-%m-%d %H:%M:%S}]", std::chrono::system_clock::now() + std::chrono::hours(8));
   }
 
   static std::string format_print(const std::string &msg)
   {
-    return std::format("[{:%Y-%m-%d %H:%M:%S}] {}", std::chrono::system_clock::now(), msg);
+    return std::format("[{:%Y-%m-%d %H:%M:%S}] {}", std::chrono::system_clock::now() + std::chrono::hours(8), msg);
   }
 
   template <typename... strings>

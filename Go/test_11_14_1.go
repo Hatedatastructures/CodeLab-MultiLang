@@ -1,12 +1,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 // // go 中的反射
@@ -89,42 +85,58 @@ func main() {
 		fmt.Println(en)
 	}
 	{
-		listening_port, error_value := net.Listen("tcp", "127.0.0.1:6779")
-		if error_value != nil {
-			fmt.Println("监听失败", error_value)
+		listeningPort, errorValue := net.Listen("tcp", "127.0.0.1:6779")
+		if errorValue != nil {
+			fmt.Println("监听失败", errorValue)
 			return
 		}
-		defer listening_port.Close()
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
+		defer func(listeningPort net.Listener) {
+			err := listeningPort.Close()
+			if err != nil {
+
+			}
+		}(listeningPort)
+		// ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		// defer stop()
 		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("收到信号:", ctx.Err()) // 注销信号 防止死循环
-				return                          // case <-time.After(time.Second * 1):
-			default:
-				socket_value, error_value := listening_port.Accept()
-				if error_value != nil {
-					fmt.Println("接受连接失败", error_value)
-					continue
+			// select {
+			// case <-ctx.Done():
+			// 	fmt.Println("收到信号:", ctx.Err()) // 注销信号 防止死循环
+			// 	return                              // case <-time.After(time.Second * 1):
+			// default:
+			// 	socket_value, error_value := listening_port.Accept()
+			// 	if error_value != nil {
+			// 		fmt.Println("接受连接失败", error_value)
+			// 		continue
+			// 	} else {
+			// 		if socket_value != nil {
+			// 			make_println(socket_value)
+			// 		} else {
+			// 			fmt.Println("监听错误")
+			// 		}
+			// 	}
+			// }
+			socketValue, errorValue := listeningPort.Accept()
+			if errorValue != nil {
+				fmt.Println("接受连接失败", errorValue)
+				continue
+			} else {
+				if socketValue != nil {
+					MakePrintln(socketValue)
 				} else {
-					if socket_value != nil {
-						make_println(socket_value)
-					} else {
-						fmt.Println("监听错误")
-					}
+					fmt.Println("监听错误")
 				}
 			}
 		}
 	}
 }
 
-func make_println(socket net.Conn) {
-	var request = make([]byte, 1024)
-	string_len, err := socket.Read(request)
+func MakePrintln(socket net.Conn) {
+	var request = make([]byte, 4096)
+	stringLen, err := socket.Read(request)
 	if err != nil {
 		fmt.Println("读取失败", err)
 		return
 	}
-	fmt.Println("连接成功,来自：", socket.RemoteAddr().String(), "长度：", string_len, "消息：", string(request[:string_len]))
+	fmt.Println("连接成功,来自：", socket.RemoteAddr().String(), "长度：", stringLen, "消息：", string(request[:stringLen]))
 }

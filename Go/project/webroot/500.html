@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>服务器错误 - 500</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(120deg, #0f172a 0%, #0b1220 40%, #ef4444 100%);
+            background-size: 200% 200%;
+            animation: bg-move 16s ease-in-out infinite alternate;
+            color: #e2e8f0;
+            font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, "Microsoft YaHei", sans-serif;
+        }
+
+        @keyframes bg-move {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            100% {
+                background-position: 100% 50%;
+            }
+        }
+
+        .wrap {
+            width: 92vw;
+            max-width: 760px;
+            padding: 10px;
+        }
+
+        .card {
+            position: relative;
+            padding: 44px 36px;
+            border-radius: 24px;
+            background: rgba(2, 8, 23, 0.55);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 18px 48px rgba(2, 8, 23, 0.6);
+            text-align: center;
+            overflow: hidden;
+            transform: translateY(6px) scale(0.992);
+            opacity: 0;
+            animation: card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        @keyframes card-in {
+            0% {
+                opacity: 0;
+                transform: translateY(8px) scale(0.985);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .glow {
+            position: absolute;
+            inset: -40px;
+            background: radial-gradient(800px circle at 20% 0%, rgba(239, 68, 68, .25), transparent 55%),
+                radial-gradient(800px circle at 80% 100%, rgba(248, 113, 113, .25), transparent 55%);
+            filter: blur(20px);
+            pointer-events: none;
+        }
+
+        .code {
+            font-size: 132px;
+            font-weight: 900;
+            letter-spacing: 6px;
+            margin: 0 0 12px;
+            line-height: 1;
+            background: linear-gradient(90deg, #fecaca, #fca5a5, #ef4444);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: shine 8s linear infinite;
+        }
+
+        @keyframes shine {
+            0% {
+                background-position: 0% center;
+            }
+
+            100% {
+                background-position: 200% center;
+            }
+        }
+
+        .desc {
+            font-size: 22px;
+            margin: 0 0 18px;
+        }
+
+        .tip {
+            font-size: 14px;
+            opacity: .85;
+        }
+
+        .btns {
+            margin-top: 26px;
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(226, 232, 240, .18);
+            color: #0f172a;
+            background: #e2e8f0;
+            text-decoration: none;
+            font-weight: 700;
+            transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+            box-shadow: 0 8px 20px rgba(2, 8, 23, 0.35);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(2, 8, 23, 0.45);
+        }
+
+        .btn.secondary {
+            color: #e2e8f0;
+            background: rgba(2, 8, 23, 0.4);
+        }
+
+        .btn.secondary:hover {
+            background: rgba(2, 8, 23, 0.52);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="card">
+            <div class="glow"></div>
+            <div class="code">500</div>
+            <p class="desc">服务器内部错误</p>
+            <p class="tip">请求暂时无法被处理，请稍后重试或联系管理员</p>
+            <div class="btns">
+                <a class="btn" href="/">返回首页</a>
+                <a class="btn secondary" href="javascript:location.reload()">重试</a>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
