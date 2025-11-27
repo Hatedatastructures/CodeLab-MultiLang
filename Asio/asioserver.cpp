@@ -34,12 +34,12 @@ awaitable<void> handle_client(tcp::socket socket)
                 asio::buffer(buffer), use_awaitable);
 
             // 打印接收到的数据
-            std::cout << "Received from " << socket.remote_endpoint() << ": "
-                      << buffer.substr(0, n) << std::flush;
+            std::cout << "来自 " << socket.remote_endpoint() << ": "
+                      << buffer.substr(0, n) << "数据：" << buffer.substr(n) <<  std::flush;
 
             // 异步回显数据给客户端
-            // co_await asio::async_write(
-            //     socket, asio::buffer(buffer, n), use_awaitable);
+            co_await asio::async_write(
+                socket, asio::buffer(buffer, n), use_awaitable);
         }
     }
     catch (const std::exception &e)
