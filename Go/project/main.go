@@ -64,7 +64,7 @@ func ProcessFunction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	fmt.Println("Request for file", clean_path)
+	// fmt.Println("Request for file", clean_path)
 	http.ServeFile(w, r, target)
 }
 

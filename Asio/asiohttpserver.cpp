@@ -29,7 +29,7 @@ static const std::string web_root_path = "webroot";
 /**
  * @brief `常量`：默认 `index` 文件名
  */
-static constexpr const char *DEFAULT_INDEX_FILE = "index.html";
+static constexpr const std::string index_path = "/index.html";
 
 /**
  * @brief `常量`：`Server` 头信息
@@ -113,7 +113,7 @@ awaitable<http::response<http::string_body>> make_server_error_response(const st
 
 
 /**
- * @brief 构建 `400 Bad Request` 响应
+ * @brief 构建 `404 Bad Request` 响应
  */
 awaitable<http::response<http::string_body>> make_client_error_response(const std::string web_root)
 {
@@ -128,65 +128,38 @@ awaitable<http::response<http::string_body>> make_client_error_response(const st
  * @param raw_target `HTTP请求目标`
  * @return `安全绝对路径`，失败返回 `std::nullopt`
  */
-std::optional<std::filesystem::path> make_safe_full_path(const std::filesystem::path &server_root, std::string raw_target)
+std::string make_safe_full_path(const std::filesystem::path &server_root, std::string raw_target)
 {
+    // namespace fs = std::filesystem;
     try
     {
-        const auto qpos = raw_target.find('?');
-        if (qpos != std::string::npos)
-        {
-            raw_target = raw_target.substr(0, qpos);
-        }
-        if (raw_target.empty())
-        {
-            raw_target = "/";
-        }
+    //    // 获取当前工作目录，绝对路径
+    //     fs::path running_path = fs::current_path(); 
+    //     if(running_path.parent_path().string().find_last_of(web_root_path) == std::string::npos)
+    //     {
+    //         std::cout << "request file error: " << raw_target << std::endl;
+    //         return ;
+    //     }
 
-        std::filesystem::path relative = std::filesystem::path(raw_target).lexically_normal();
-
-        if (!relative.empty())
+        std::string file_path;
+        if(raw_target.size() == 1 && raw_target[0] == '/')
         {
-            auto native = relative.native();
-            if (!native.empty() && native.front() == '/')
-            {
-                relative = native.substr(1);
-            }
+            file_path = server_root.string() + raw_target + index_path;
         }
-
-        if (!raw_target.empty() && raw_target.back() == '/')
+        else if(raw_target.size() > 1 && raw_target[0] == '/')
         {
-            relative /= DEFAULT_INDEX_FILE;
+            file_path = server_root.string() + raw_target;
         }
-
-        std::error_code ec;
-        const std::filesystem::path canonical_root = std::filesystem::weakly_canonical(server_root, ec);
-        if (ec)
+        else if(raw_target.empty())
         {
-            return std::nullopt;
+            file_path = server_root.string() + index_path;
         }
-        const std::filesystem::path tentative = server_root / relative;
-        const std::filesystem::path full_path = std::filesystem::weakly_canonical(tentative, ec);
-        if (ec)
-        {
-            return std::nullopt;
-        }
-        const std::string full_path_str = full_path.string();
-        const std::string root_str = canonical_root.string();
-        if (full_path_str.rfind(root_str, 0) != 0)
-        {
-            return std::nullopt;
-        }
-
-        if (!std::filesystem::exists(full_path) || !std::filesystem::is_regular_file(full_path))
-        {
-            return std::nullopt;
-        }
-
-        return full_path;
+        return file_path;
     }
     catch (...)
     {
-        return std::nullopt;
+        std::cerr << "make safe full path error: " << raw_target << std::endl;
+        return std::string{};
     }
 }
 
@@ -203,25 +176,23 @@ awaitable<http::response<http::string_body>> build_response(const http::request<
     response.set(http::field::server, SERVER_NAME);
 
     // 构建安全路径
-    std::filesystem::path full_path;
     const std::string target = std::string(request.target());
-    const std::filesystem::path server_root = web_root_path;
     
-    
+    // std::cout << "request target: " << target << std::endl;
 
     std::string file_absolute_path;
     try
     {
         // 使用统一的安全路径构建函数
-        auto full_path_opt = make_safe_full_path(server_root, target);
-        if (!full_path_opt)
+        file_absolute_path = make_safe_full_path(web_root_path, target);
+        if (file_absolute_path.empty())
         {
+            // std::cout << "request file error: " << target << std::endl;
             co_return co_await make_client_error_response(web_root_path);
         }
-        full_path = *full_path_opt;
-        file_absolute_path = full_path.string();
+        file_absolute_path = file_absolute_path;
         
-        std::cout << "request file: " << file_absolute_path << std::endl;
+        // std::cout << "request file: " << file_absolute_path << std::endl;
 
         std::string body = co_await construct_response_content(file_absolute_path);
         if(!body.empty())
@@ -252,6 +223,18 @@ awaitable<void> handle_client(asio::ip::tcp::socket socket)
 {
     try
     {
+        /**
+         * @brief 为客户端 `socket` 启用 `TCP_NODELAY`，降低 `Nagle` 算法导致的延迟
+         */
+        try
+        {
+            socket.set_option(asio::ip::tcp::no_delay(true));
+        }
+        catch (const std::exception &e)
+        {
+            // 忽略此处异常，不影响后续处理
+        }
+
         beast::flat_buffer read_buffer;
         http::request<http::string_body> request;
 
@@ -262,7 +245,7 @@ awaitable<void> handle_client(asio::ip::tcp::socket socket)
 
             // 构建并写回响应
             auto response = co_await build_response(request);
-            response.keep_alive(request.keep_alive());
+            response.keep_alive(false);
             co_await http::async_write(socket, response, use_awaitable);
             if (response.need_eof())
             {
@@ -277,7 +260,7 @@ awaitable<void> handle_client(asio::ip::tcp::socket socket)
     }
     catch (const std::exception &e)
     {
-        std::cerr << "client " << socket.remote_endpoint() << " error: "<< e.what() << std::endl;
+        // std::cerr << "client " << socket.remote_endpoint() << " error "<< std::endl;
     }
 }
 
@@ -293,7 +276,7 @@ awaitable<void> accept_loop(asio::ip::tcp::acceptor &acceptor)
         asio::ip::tcp::socket socket = co_await acceptor.async_accept(use_awaitable);
 
         // 打印新客户端连接信息
-        std::cout << "new client connected: " << socket.remote_endpoint() << std::endl;
+        // std::cout << "new client connected: " << socket.remote_endpoint() << std::endl;
 
         // 启动客户端处理协程（`detached`：后台运行）
         co_spawn(acceptor.get_executor(),handle_client(std::move(socket)),detached);
@@ -314,6 +297,19 @@ public:
     tcp_server(asio::io_context &io_context, unsigned short port)
         : acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port))
     {
+        /**
+         * @brief `监听器`初始化：开启地址复用，并设置最大 `backlog`
+         */
+        try
+        {
+            acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+            acceptor_.listen(asio::socket_base::max_listen_connections);
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "acceptor init error: " << e.what() << std::endl;
+        }
+
         co_spawn(io_context, accept_loop(acceptor_), detached);
     }
 
@@ -337,7 +333,7 @@ int main()
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Server error: " << e.what() << std::endl;
+        // std::cerr << "Server error: " << e.what() << std::endl;
         return 1;
     }
     return 0;
