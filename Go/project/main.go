@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -32,46 +32,109 @@ func derive_webroot() string {
 // `webroot` 静态目录绝对路径
 var webroot = derive_webroot()
 
-func ProcessFunction(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Request received")
+// CachedFile 缓存文件结构体
+type CachedFile struct {
+	Content     []byte
+	ContentType string
+}
 
-	clean_path := path.Clean(strings.TrimSpace(r.URL.Path))
-	if clean_path == "" { // 空路径兜底为根路径
-		clean_path = "/"
-	}
+// 全局文件缓存：路径 -> 文件内容
+var fileCache = make(map[string]*CachedFile)
 
-	if clean_path == "/" {
-		fmt.Println("Request for index.html")
-		target := filepath.Join(webroot, "index.html")
-		http.ServeFile(w, r, target)
-		return
-	}
-
-	rel := strings.TrimPrefix(clean_path, "/") // 去掉指定字符
-	target := filepath.Join(webroot, rel)      // 拼接成绝对路径
-
-	webroot_abs, err1 := filepath.Abs(webroot)
-	target_abs, err2 := filepath.Abs(target)
-	if err1 == nil && err2 == nil {
-		webroot_abs = filepath.Clean(webroot_abs)
-		target_abs = filepath.Clean(target_abs)
-		// 允许访问 webroot 本身或其子路径，其它情况返回 403
-		sep := string(os.PathSeparator)
-		// HasPrefix 检查 target_abs 是否以 webroot_abs 开头 加人sep检查防止请求绕过webroot目录
-		if target_abs != webroot_abs && !strings.HasPrefix(target_abs, webroot_abs+sep) {
-			fmt.Println("阻止路径穿越:", target_abs)
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
+/**
+ * @brief 加载静态资源到内存
+ */
+func loadStaticFiles() {
+	fmt.Println("正在加载静态资源到内存...", webroot)
+	err := filepath.Walk(webroot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
+		if info.IsDir() {
+			return nil
+		}
+
+		// 读取文件内容
+		content, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Printf("无法读取文件: %s, error: %v\n", path, err)
+			return nil
+		}
+
+		// 计算相对路径作为 key，统一使用 "/" 分隔符
+		relPath, err := filepath.Rel(webroot, path)
+		if err != nil {
+			return nil
+		}
+		// Windows 下 filepath.Rel 可能返回反斜杠，统一转换为正斜杠以匹配 URL
+		relPath = filepath.ToSlash(relPath)
+		// 确保以 "/" 开头，与 URL path 匹配
+		if !strings.HasPrefix(relPath, "/") {
+			relPath = "/" + relPath
+		}
+
+		// 获取 MIME 类型
+		ext := filepath.Ext(path)
+		contentType := mime.TypeByExtension(ext)
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		fileCache[relPath] = &CachedFile{
+			Content:     content,
+			ContentType: contentType,
+		}
+		// fmt.Printf("已缓存: %s (%d bytes, %s)\n", relPath, len(content), contentType)
+		return nil
+	})
+
+	if err != nil {
+		fmt.Printf("加载静态资源失败: %v\n", err)
+	} else {
+		fmt.Printf("静态资源加载完成，共缓存 %d 个文件\n", len(fileCache))
 	}
-	// fmt.Println("Request for file", clean_path)
-	http.ServeFile(w, r, target)
+}
+
+func ProcessFunction(w http.ResponseWriter, r *http.Request) {
+	// 性能优化：高并发下严禁在热点路径打印日志
+	// fmt.Println("Request received")
+
+	reqPath := r.URL.Path
+	if reqPath == "/" {
+		reqPath = "/index.html"
+	}
+
+	// 直接查表，O(1) 复杂度
+	if file, ok := fileCache[reqPath]; ok {
+		w.Header().Set("Content-Type", file.ContentType)
+		w.Header().Set("Content-Length", fmt.Sprint(len(file.Content)))
+		w.Write(file.Content)
+	} else {
+		http.NotFound(w, r)
+	}
 }
 
 func main() {
-	http.HandleFunc("/", ProcessFunction)
-	fmt.Println("HTTP server listening on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	// 初始化缓存
+	loadStaticFiles()
+
+	// 自定义 ServeMux
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", ProcessFunction)
+
+	// 自定义 Server，优化超时设置
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+		// ReadTimeout:  5 * time.Second, // 读超时
+		// WriteTimeout: 10 * time.Second, // 写超时
+		// IdleTimeout:  120 * time.Second, // Keep-Alive 空闲超时
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	fmt.Println("HTTP server listening on :8080 (Optimized)")
+	// ListenAndServe 默认开启 Keep-Alive
+	if err := server.ListenAndServe(); err != nil {
 		fmt.Fprintf(os.Stderr, "listen and serve: %v\n", err)
 		return
 	}

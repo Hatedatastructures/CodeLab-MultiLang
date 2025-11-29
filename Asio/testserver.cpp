@@ -9,6 +9,7 @@
 #include <boost/asio/ts/internet.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/use_awaitable.hpp>
+#include <windows.h>
 
 
 // 协程函数：处理单个客户端连接的生命周期
@@ -44,12 +45,13 @@ boost::asio::awaitable<void> client_session(boost::asio::ip::tcp::endpoint endpo
 
 int main()
 {
+    SetConsoleOutputCP(CP_UTF8);
     try
     {
         boost::asio::io_context io_context;
-        boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), 8080); // 服务器地址和端口
+        boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address("192.168.137.1"), 8080); // 服务器地址和端口
 
-        int num_clients = 10000; // 模拟的并发客户端数量
+        int num_clients = 1000; // 模拟的并发客户端数量
         std::vector<std::thread> threads;
         int num_threads = std::thread::hardware_concurrency(); // 使用CPU核心数作为线程数
 

@@ -36,6 +36,41 @@ static constexpr const std::string index_path = "/index.html";
  */
 static const std::string SERVER_NAME = "test_asio_http_server";
 
+/**
+ * @brief `全局变量`：静态文件缓存
+ * 键：文件系统路径（使用系统分隔符）
+ * 值：文件内容
+ */
+static std::unordered_map<std::string, std::string> file_cache;
+
+/**
+ * @brief 加载静态文件到内存
+ * @param root_path `根目录路径`
+ */
+void load_static_files(const std::string& root_path)
+{
+    if (!std::filesystem::exists(root_path))
+    {
+        std::cerr << "webroot not found: " << root_path << std::endl;
+        return;
+    }
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root_path))
+    {
+        if (std::filesystem::is_regular_file(entry))
+        {
+            std::ifstream file(entry.path(), std::ios::binary);
+            if (file)
+            {
+                std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                // 使用系统原生路径格式作为键
+                file_cache[entry.path().string()] = std::move(content);
+                std::cout << "Load file: " << entry.path().string() << " (" << file_cache[entry.path().string()].size() << " bytes)" << std::endl;
+            }
+        }
+    }
+}
+
 static const std::unordered_map<std::string, std::string> extension_map{
     {"html", "text/html"},
     {"htm", "text/html"},
@@ -75,18 +110,18 @@ return it->second;
 }
 
 /**
- * @brief 从文件中读取内容
+ * @brief 从内存缓存中读取内容
  * @param content_path `文件路径`
- * @return `文件内容`
+ * @return `文件内容指针`，如果不存在返回 `nullptr`
  */
-awaitable<std::string> construct_response_content(const std::string &content_path)
+const std::string* construct_response_content(const std::string &content_path)
 {
-    std::ifstream file(content_path, std::ios::binary);
-    if (!file)
-        co_return std::string{}; 
-    std::string data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    co_await asio::post(asio::use_awaitable);  
-    co_return data;  
+    auto it = file_cache.find(content_path);
+    if (it != file_cache.end())
+    {
+        return &it->second;
+    }
+    return nullptr;
 }
 
 awaitable<http::response<http::string_body>> make_error_response(const std::string file_path)
@@ -96,7 +131,14 @@ awaitable<http::response<http::string_body>> make_error_response(const std::stri
     response.set(http::field::server, SERVER_NAME);
     response.result(http::status::internal_server_error);
     response.set(http::field::content_type,mime_type(file_path));
-    response.body() = co_await construct_response_content(file_path);
+    // 直接从内存读取
+    const std::string* content = construct_response_content(std::filesystem::path(file_path).string());
+    if (content)
+    {
+        response.body() = *content;
+    }
+    // 如果错误页面本身不存在，body 保持为空
+    
     response.content_length(response.body().size());
     response.keep_alive(false);
     response.prepare_payload();
@@ -108,8 +150,10 @@ awaitable<http::response<http::string_body>> make_error_response(const std::stri
  */
 awaitable<http::response<http::string_body>> make_server_error_response(const std::string web_root)
 {
+    std::cout << "500 internal server error: " << web_root + "/500.html" << std::endl;
     co_return co_await make_error_response(web_root + "/500.html");
 }
+
 
 
 /**
@@ -117,6 +161,7 @@ awaitable<http::response<http::string_body>> make_server_error_response(const st
  */
 awaitable<http::response<http::string_body>> make_client_error_response(const std::string web_root)
 {
+    std::cout << "404 not found: " << web_root + "/404.html" << std::endl;
     co_return co_await make_error_response(web_root + "/404.html");
 }
 
@@ -130,31 +175,23 @@ awaitable<http::response<http::string_body>> make_client_error_response(const st
  */
 std::string make_safe_full_path(const std::filesystem::path &server_root, std::string raw_target)
 {
-    // namespace fs = std::filesystem;
     try
     {
-    //    // 获取当前工作目录，绝对路径
-    //     fs::path running_path = fs::current_path(); 
-    //     if(running_path.parent_path().string().find_last_of(web_root_path) == std::string::npos)
-    //     {
-    //         std::cout << "request file error: " << raw_target << std::endl;
-    //         return ;
-    //     }
+        std::filesystem::path file_path;
+        
+        if (raw_target.empty() || (raw_target.size() == 1 && raw_target[0] == '/'))
+        {
+            file_path = server_root / index_path.substr(1); // 去掉开头的 / 以避免绝对路径覆盖
+        }
+        else
+        {
+            // 移除开头的 /，防止 path 将其视为根路径
+            std::string rel_path = (raw_target[0] == '/') ? raw_target.substr(1) : raw_target;
+            file_path = server_root / rel_path;
+        }
 
-        std::string file_path;
-        if(raw_target.size() == 1 && raw_target[0] == '/')
-        {
-            file_path = server_root.string() + raw_target + index_path;
-        }
-        else if(raw_target.size() > 1 && raw_target[0] == '/')
-        {
-            file_path = server_root.string() + raw_target;
-        }
-        else if(raw_target.empty())
-        {
-            file_path = server_root.string() + index_path;
-        }
-        return file_path;
+        // 转换为系统原生路径格式，以匹配缓存键
+        return file_path.make_preferred().string();
     }
     catch (...)
     {
@@ -187,24 +224,24 @@ awaitable<http::response<http::string_body>> build_response(const http::request<
         file_absolute_path = make_safe_full_path(web_root_path, target);
         if (file_absolute_path.empty())
         {
-            // std::cout << "request file error: " << target << std::endl;
+            std::cout << "request file error: " << target << std::endl;
             co_return co_await make_client_error_response(web_root_path);
         }
-        file_absolute_path = file_absolute_path;
         
         // std::cout << "request file: " << file_absolute_path << std::endl;
 
-        std::string body = co_await construct_response_content(file_absolute_path);
-        if(!body.empty())
+        // 直接从内存读取，无需 co_await
+        const std::string* body = construct_response_content(file_absolute_path);
+        if(body)
         {
             response.result(boost::beast::http::status::ok);
             response.set(http::field::content_type,mime_type(file_absolute_path));
-            response.body() = std::move(body);
+            response.body() = *body;
             response.content_length(response.body().size());
         }
         else
         {
-            co_return co_await make_server_error_response(web_root_path);
+            co_return co_await make_client_error_response(web_root_path);
         }
         response.prepare_payload();
     }
@@ -245,7 +282,7 @@ awaitable<void> handle_client(asio::ip::tcp::socket socket)
 
             // 构建并写回响应
             auto response = co_await build_response(request);
-            response.keep_alive(false);
+            response.keep_alive(request.keep_alive());
             co_await http::async_write(socket, response, use_awaitable);
             if (response.need_eof())
             {
@@ -258,9 +295,23 @@ awaitable<void> handle_client(asio::ip::tcp::socket socket)
         socket.shutdown(asio::ip::tcp::socket::shutdown_send, ec);
         socket.close(ec);
     }
+    catch (const boost::system::system_error &e)
+    {
+        // 忽略正常的连接关闭 (end_of_stream) 和 客户端断开 (connection_reset)
+        if (e.code() != http::error::end_of_stream && 
+            e.code() !=  boost::asio::error::connection_reset &&
+            e.code() !=  boost::asio::error::broken_pipe)
+        {
+            std::cerr << "client " << socket.remote_endpoint() << " error: " << e.what() << std::endl;
+        }
+        socket.close();
+        co_return;
+    }
     catch (const std::exception &e)
     {
-        // std::cerr << "client " << socket.remote_endpoint() << " error "<< std::endl;
+        std::cerr << "client " << socket.remote_endpoint() << " error: " << e.what() << std::endl;
+        socket.close();
+        co_return;
     }
 }
 
@@ -276,7 +327,7 @@ awaitable<void> accept_loop(asio::ip::tcp::acceptor &acceptor)
         asio::ip::tcp::socket socket = co_await acceptor.async_accept(use_awaitable);
 
         // 打印新客户端连接信息
-        // std::cout << "new client connected: " << socket.remote_endpoint() << std::endl;
+        std::cout << "new client connected: " << socket.remote_endpoint() << std::endl;
 
         // 启动客户端处理协程（`detached`：后台运行）
         co_spawn(acceptor.get_executor(),handle_client(std::move(socket)),detached);
@@ -304,6 +355,7 @@ public:
         {
             acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address(true));
             acceptor_.listen(asio::socket_base::max_listen_connections);
+            std::cout << "acceptor listen max connections: " << asio::socket_base::max_listen_connections << std::endl;
         }
         catch (const std::exception &e)
         {
@@ -321,12 +373,15 @@ int main()
 {
     try
     {
+        // 加载静态文件到内存
+        load_static_files(web_root_path);
+
         asio::io_context io_context;         
         tcp_server server(io_context, 8080); 
 
         std::cout << "http server running on port 8080, webroot: '" << web_root_path << "'" << std::endl;
         std::vector<std::jthread> threads;
-        for (int i = 0; i < 16; ++i)
+        for (int i = 0; i < 32; ++i)
         {
             threads.emplace_back([&io_context](){ io_context.run(); });
         }
