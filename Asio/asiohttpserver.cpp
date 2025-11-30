@@ -381,7 +381,7 @@ int main()
 
         std::cout << "http server running on port 8080, webroot: '" << web_root_path << "'" << std::endl;
         std::vector<std::jthread> threads;
-        for (int i = 0; i < 32; ++i)
+        for (int i = 0; i < 16; ++i)
         {
             threads.emplace_back([&io_context](){ io_context.run(); });
         }

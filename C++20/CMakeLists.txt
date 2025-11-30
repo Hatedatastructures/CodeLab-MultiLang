@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.26)  # 确保版本≥3.23（支持FILE_SET）
 project(ModuleDemo)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # 1. 定义可执行目标（先创建目标）
 add_executable(ModuleDemo
-        module.cpp  # 主程序（不包含模块接口文件，后续通过FILE_SET添加）
+        module.cpp
+        generator.cpp  # 主程序（不包含模块接口文件，后续通过FILE_SET添加）
 )
 
 # 2. 关键：为目标添加 CXX_MODULES 类型的 FILE_SET，包含模块接口文件

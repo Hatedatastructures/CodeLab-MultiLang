@@ -6,7 +6,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
 // 命名空间别名简化代码
 namespace asio = boost::asio;
 using tcp = asio::ip::tcp;

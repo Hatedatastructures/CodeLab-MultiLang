@@ -103,7 +103,6 @@ func ProcessFunction(w http.ResponseWriter, r *http.Request) {
 	if reqPath == "/" {
 		reqPath = "/index.html"
 	}
-
 	// 直接查表，O(1) 复杂度
 	if file, ok := fileCache[reqPath]; ok {
 		w.Header().Set("Content-Type", file.ContentType)
