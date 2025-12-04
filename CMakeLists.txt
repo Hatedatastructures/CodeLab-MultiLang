@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 4.10)
 project(C_and_Cplusplus)
 
 set(CMAKE_CXX_STANDARD 20)

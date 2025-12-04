@@ -1,6 +1,7 @@
 #include <iostream>
 #include <qt6/QtWidgets/qapplication.h>
 #include <qt6/QtWidgets/qwidget.h>
+#include <qt6/QtGui/QtGui>
 
 
 

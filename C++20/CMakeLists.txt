@@ -8,7 +8,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # 1. 定义可执行目标（先创建目标）
 add_executable(ModuleDemo
         module.cpp
-        generator.cpp  # 主程序（不包含模块接口文件，后续通过FILE_SET添加）
+        generator.cpp
+        # 主程序（不包含模块接口文件，后续通过FILE_SET添加）
 )
 
 # 2. 关键：为目标添加 CXX_MODULES 类型的 FILE_SET，包含模块接口文件

@@ -7,7 +7,6 @@
 #include <string>
 #include <flat_map>
 
-import std;
 
 std::generator<std::string> generate_strings()
 {
@@ -23,7 +22,7 @@ int main()
     {
         std::cout << value << std::endl;
     }
-    if consteval {
+    if consteval  {
         std::cout << "consteval" << std::endl;
     }
     std::unreachable();
