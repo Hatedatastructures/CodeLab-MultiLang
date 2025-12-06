@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.10)
+cmake_minimum_required(VERSION 3.68)
 project(C_and_Cplusplus)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -78,4 +78,7 @@ add_executable(C_and_Cplusplus
         C++20/mymodule.cppm
         C++20/mymodule.o
         C++20/ranges.cpp
-        C++20/test.cpp)
+        C++20/test.cpp
+        ProjectSimulation/CoroutineLog/CoroutineLog.hpp
+        ProjectSimulation/main.cpp
+        ProjectSimulation/main.cpp)
