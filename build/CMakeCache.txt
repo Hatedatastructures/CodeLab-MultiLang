@@ -18,10 +18,22 @@
 CMAKE_BUILD_TYPE:STRING=Debug
 
 //No help, variable specified on the command line.
+CMAKE_CXX_COMPILER:FILEPATH=C:/Qt/Tools/mingw1310_64/bin/g++.exe
+
+//No help, variable specified on the command line.
+CMAKE_C_COMPILER:FILEPATH=C:/Qt/Tools/mingw1310_64/bin/gcc.exe
+
+//No help, variable specified on the command line.
 CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
 
 //Value Computed by CMake.
 CMAKE_FIND_PACKAGE_REDIRECTS_DIR:STATIC=C:/Users/C1373/Desktop/C-and-Cplusplus/build/CMakeFiles/pkgRedirects
+
+//No help, variable specified on the command line.
+CMAKE_MAKE_PROGRAM:UNINITIALIZED=c:\Users\C1373\.trae\extensions\kylinideteam.kylin-cmake-tools-0.0.4-universal\res\ninja\win32-x64\ninja
+
+//No help, variable specified on the command line.
+CMAKE_TOOLCHAIN_FILE:FILEPATH=c:/qt/6.10.1/mingw_64/lib/cmake/Qt6/qt.toolchain.cmake
 
 
 ########################
@@ -47,7 +59,7 @@ CMAKE_EDIT_COMMAND:INTERNAL=C:/Qt/Tools/CMake_64/bin/cmake-gui.exe
 //Name of external makefile project generator.
 CMAKE_EXTRA_GENERATOR:INTERNAL=
 //Name of generator.
-CMAKE_GENERATOR:INTERNAL=NMake Makefiles
+CMAKE_GENERATOR:INTERNAL=Ninja
 //Generator instance identifier.
 CMAKE_GENERATOR_INSTANCE:INTERNAL=
 //Name of generator platform.
