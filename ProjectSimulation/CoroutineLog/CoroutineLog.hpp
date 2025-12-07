@@ -1,20 +1,36 @@
 #pragma once
 #include <string>
 #include <format>
+#include <chrono>
 #include <vector>
 #include <memory>
-#include <unordered_map>
 #include <iostream>
+#include <unordered_map>
+
 #include <boost/asio.hpp>
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/stream_file.hpp>
 
 namespace asio = boost::asio;
 
-namespace CoroutineLog
+namespace performance_log
 {
     template<typename T>
     concept compatible = requires(const T& x) { asio::buffer(x); };
+
+    enum class level
+    {
+        debug,
+        info,
+        warn,
+        error,
+        fatal,
+    };
+
+    inline std::string timestamp()
+    {
+       return std::format("[{:%Y-%m-%d %H:%M}]", std::chrono::system_clock::now() + std::chrono::hours(8));
+    }
 
     class coroutine_log
     {
@@ -93,36 +109,75 @@ namespace CoroutineLog
                 }
                 it = file_map.emplace(path, std::make_shared<asio::stream_file>(std::move(fp))).first;
             }
-            std::vector<asio::const_buffer> const_buffers;
-            const_buffers.reserve(data.size());
-            for (auto const& s : data)
-            {
-                const_buffers.emplace_back(asio::buffer(s));
-            }
+            std::size_t total = 0;
+            for (auto const& s : data) { total += s.size(); }
+            std::string joined;
+            joined.reserve(total);
+            for (auto const& s : data) { joined.append(s); }
             boost::system::error_code ec;
-            std::size_t n = co_await asio::async_write(*it->second,const_buffers,
-            asio::redirect_error(asio::use_awaitable, ec));
+            std::size_t n = co_await asio::async_write(*it->second,asio::buffer(joined.data(), joined.size()),
+                asio::redirect_error(asio::use_awaitable, ec));
             if (ec)
             {
                 co_return 0;
             }
             co_return n;
         }
+        std::string to_string(const level& log_level) const
+        {
+            switch (log_level)
+            {
+                case level::debug: return "DEBUG";
+                case level::info: return "INFO";
+                case level::warn: return "WARN";
+                case level::error: return "ERROR";
+                case level::fatal: return "FATAL";
+                default: return "";
+            }
+        }
+        asio::awaitable<std::size_t> console_write(const level& log_level, const std::string& data) const
+        {
+            co_await asio::dispatch(serial_exec, asio::use_awaitable);
+            std::string log_str = timestamp() + std::format("[{}] ", to_string(log_level)) + data;
+            std::cout.write(log_str.data(), static_cast<std::streamsize>(log_str.size()));
+            std::cout.flush();
+            std::size_t n = log_str.size();
+            co_return n;
+        }
+
+        template<typename... Args>
+        asio::awaitable<std::size_t> file_log_message(const std::string& path, const std::string& format, Args&&... args) const
+        {
+            std::string data = timestamp() + std::vformat(format, std::make_format_args(std::forward<Args>(args)...));
+            co_return co_await file_write(path, data);
+        }
+        asio::awaitable<std::size_t> file_log_message(const std::string& path, const std::vector<std::string>& data) const
+        {
+            co_return co_await file_write(path, data);
+        }
+        asio::awaitable<std::size_t> file_log_message(const std::string& path, const std::string& data) const
+        {
+            co_return co_await file_write(path, timestamp() + data);
+        }
+        template<typename... Args>
+        asio::awaitable<std::size_t> console_log_message(level log_level, const std::string& format, Args&&... args) const
+        {
+            std::string data = std::vformat(format, std::make_format_args(std::forward<Args>(args)...));
+            co_return co_await console_write(log_level, data);
+        }
+        asio::awaitable<std::size_t> console_log_message(level log_level, const std::string& data) const
+        {
+            co_return co_await console_write(log_level, data);
+        }
+
     private:
         asio::any_io_executor event_executor;
         asio::strand<asio::any_io_executor> serial_exec;
         mutable std::unordered_map<std::string, std::shared_ptr<asio::stream_file>> file_map;
     };
-    // template<typename ...Args>
-    // asio::awaitable<std::uint32_t> FileLogMassage(const std::string& format_str, Args... args)
-    // {
-    //     std::string data = std::vformat(format_str, std::make_format_args(args...));
-    //     co_return co_await asio::async_write(std::cout,asio::buffer(data),asio::use_awaitable);
-    // }
-    // template<typename ...Args>
-    // asio::awaitable<std::uint32_t> LogMassage(const std::string& format_str, Level level, Args... args)
-    // {
-    //     std::string data = std::vformat(format_str, std::make_format_args(args...));
-    //     co_return co_await asio::async_write(std::cout,asio::buffer(data),asio::use_awaitable);
-    // }
+
+
+    
+
+
 }
