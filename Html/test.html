@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heart Particles WebAR</title>
+    <style>
+        :root {
+            --ui-bg: rgba(20, 20, 24, 0.5);
+            --ui-border: rgba(255, 255, 255, 0.15);
+            --ui-text: #e8e8ea;
+            --accent: #00ffff;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            background: #0b0c10;
+            color: var(--ui-text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+        }
+
+        #canvas_container {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+        }
+
+        #video_input {
+            display: none;
+        }
+
+        #ui_panel {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 10px 12px;
+            backdrop-filter: saturate(120%) blur(10px);
+            background: var(--ui-bg);
+            border: 1px solid var(--ui-border);
+            border-radius: 12px;
+            z-index: 10;
+        }
+
+        #color_picker {
+            width: 36px;
+            height: 28px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .btn {
+            height: 28px;
+            padding: 0 12px;
+            border-radius: 8px;
+            border: 1px solid var(--ui-border);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--ui-text);
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        #status_text {
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            padding: 8px 10px;
+            background: var(--ui-bg);
+            border: 1px solid var(--ui-border);
+            border-radius: 10px;
+            font-size: 12px;
+            z-index: 10;
+            user-select: none;
+        }
+    </style>
+
+    <!-- 使用 unpkg 提供的 MediaPipe Hands 依赖 -->
+    <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <!-- Three.js Import Map (使用 unpkg) -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="canvas_container"></div>
+    <video id="video_input" playsinline></video>
+
+    <div id="ui_panel">
+        <span>粒子颜色</span>
+        <input id="color_picker" type="color" value="#00ffff" />
+        <button id="full_screen_btn" class="btn">⛶ 全屏</button>
+    </div>
+    <div id="status_text">初始化中...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        /**
+         * @brief `全局常量` 配置
+         * @details 控制粒子数量、物理参数、心形生成比例等
+         */
+        const PARTICLE_COUNT = 16000;
+        const PARTICLE_SIZE = 0.08;
+        const DEFAULT_COLOR = 0x00ffff;
+
+        const STIFFNESS = 0.08;          // `弹性系数`
+        const DAMPING = 0.88;            // `阻尼系数`
+        const DISPERSION_MAX = 2.0;      // `最大扩散系数`
+        const SCALE_MIN = 0.7;           // `最小缩放`
+        const SCALE_MAX = 3.0;           // `最大缩放`
+
+        /**
+         * @brief `场景对象`
+         */
+        let scene, camera, renderer;
+        let particle_geometry, particle_material, particle_system;
+
+        /**
+         * @brief `粒子数据缓冲`
+         */
+        let pos_array, vel_array;
+        let base_shape_array;     // `心形基础点云`
+        let noise_array;          // `每粒子固定噪声偏移`
+
+        /**
+         * @brief `交互状态`
+         */
+        let system_scale = 1.0;           // `系统缩放`
+        let dispersion_factor = 0.0;      // `扩散强度`
+        let last_time_ms = performance.now();
+
+        /**
+         * @brief `手部信息`
+         */
+        let is_hands_detected = false;
+        let left_hand_info = null;
+        let right_hand_info = null;
+
+        /**
+         * @brief `初始化入口`
+         */
+        function init_main() {
+            init_scene();
+            init_particles();
+            setup_ui();
+            setup_mediapipe();
+            animate();
+        }
+
+        /**
+         * @brief `初始化 Three.js 场景`
+         */
+        function init_scene() {
+            const canvas_container = document.getElementById('canvas_container');
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.02);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 20;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            canvas_container.appendChild(renderer.domElement);
+
+            window.addEventListener('resize', on_window_resize);
+        }
+
+        /**
+         * @brief `窗口尺寸变化`
+         */
+        function on_window_resize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * @brief `生成心形点云`
+         * @return `Float32Array` 心形点坐标
+         */
+        function generate_heart_points() {
+            const points = new Float32Array(PARTICLE_COUNT * 3);
+            let p = 0;
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const t = Math.random() * Math.PI * 2;
+                // `经典爱心参数方程`
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                const z = (Math.random() - 0.5) * 4; // `厚度`
+                const s = 0.4; // `缩放`
+                points[p++] = x * s;
+                points[p++] = y * s;
+                points[p++] = z;
+            }
+            return points;
+        }
+
+        /**
+         * @brief `初始化粒子系统`
+         */
+        function init_particles() {
+            particle_geometry = new THREE.BufferGeometry();
+            pos_array = new Float32Array(PARTICLE_COUNT * 3);
+            vel_array = new Float32Array(PARTICLE_COUNT * 3);
+            noise_array = new Float32Array(PARTICLE_COUNT * 3);
+            base_shape_array = generate_heart_points();
+
+            // `初始化随机位置与固定噪声`
+            for (let i = 0; i < PARTICLE_COUNT * 3; i += 3) {
+                pos_array[i] = (Math.random() - 0.5) * 50;
+                pos_array[i + 1] = (Math.random() - 0.5) * 50;
+                pos_array[i + 2] = (Math.random() - 0.5) * 50;
+
+                vel_array[i] = 0;
+                vel_array[i + 1] = 0;
+                vel_array[i + 2] = 0;
+
+                // `固定噪声`：用于扩散时的稳定抖动
+                noise_array[i] = (Math.random() - 0.5) * 10;
+                noise_array[i + 1] = (Math.random() - 0.5) * 10;
+                noise_array[i + 2] = (Math.random() - 0.5) * 10;
+            }
+
+            particle_geometry.setAttribute('position', new THREE.BufferAttribute(pos_array, 3));
+
+            particle_material = new THREE.PointsMaterial({
+                color: DEFAULT_COLOR,
+                size: PARTICLE_SIZE,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            particle_system = new THREE.Points(particle_geometry, particle_material);
+            scene.add(particle_system);
+
+            set_status_text('摄像头初始化中...');
+        }
+
+        /**
+         * @brief `设置 UI 与交互事件`
+         */
+        function setup_ui() {
+            const color_picker = document.getElementById('color_picker');
+            const full_screen_btn = document.getElementById('full_screen_btn');
+
+            color_picker.addEventListener('input', (e) => {
+                const hex = e.target.value;
+                particle_material.color.set(hex);
+            });
+
+            full_screen_btn.addEventListener('click', () => {
+                const doc = document;
+                const el = document.documentElement;
+                if (!doc.fullscreenElement) {
+                    el.requestFullscreen?.();
+                } else {
+                    doc.exitFullscreen?.();
+                }
+            });
+        }
+
+        /**
+         * @brief `初始化 MediaPipe Hands`
+         */
+        function setup_mediapipe() {
+            const video_el = document.getElementById('video_input');
+            const hands = new Hands({ locateFile: (file) => `https://unpkg.com/@mediapipe/hands/${file}` });
+
+            hands.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.6
+            });
+
+            hands.onResults(on_hands_results);
+
+            const camera = new Camera(video_el, {
+                onFrame: async () => { await hands.send({ image: video_el }); },
+                width: 640,
+                height: 480
+            });
+            camera.start();
+        }
+
+        /**
+         * @brief `手势结果回调`
+         * @param results `MediaPipe Hands` 输出
+         */
+        function on_hands_results(results) {
+            const hands_list = results.multiHandLandmarks || [];
+            is_hands_detected = hands_list.length > 0;
+
+            left_hand_info = null;
+            right_hand_info = null;
+
+            // `采集双手信息`
+            for (let i = 0; i < hands_list.length && i < 2; i++) {
+                const info = compute_hand_info(hands_list[i]);
+                if (!left_hand_info) left_hand_info = info; else right_hand_info = info;
+            }
+
+            // `根据双手张合控制缩放与扩散`
+            let openness_avg = 0.0;
+            let scale_target = system_scale;
+
+            if (left_hand_info && right_hand_info) {
+                const dist = left_hand_info.center_world.distanceTo(right_hand_info.center_world);
+                openness_avg = (left_hand_info.openness_ratio + right_hand_info.openness_ratio) * 0.5;
+                scale_target = clamp(SCALE_MIN + dist * 0.12 + openness_avg * 0.4, SCALE_MIN, SCALE_MAX);
+            } else if (left_hand_info || right_hand_info) {
+                const sole = left_hand_info || right_hand_info;
+                openness_avg = sole.openness_ratio;
+                scale_target = clamp(SCALE_MIN + sole.palm_size_norm * 2.0, SCALE_MIN, SCALE_MAX);
+            }
+
+            const dispersion_target = clamp(openness_avg * DISPERSION_MAX, 0.0, DISPERSION_MAX);
+
+            // `平滑插值` 保证丝滑
+            system_scale += (scale_target - system_scale) * 0.12;
+            dispersion_factor += (dispersion_target - dispersion_factor) * 0.15;
+
+            // `状态提示`
+            set_status_text(is_hands_detected ? `检测到${hands_list.length}只手 · 张合:${openness_avg.toFixed(2)} · 缩放:${system_scale.toFixed(2)} · 扩散:${dispersion_factor.toFixed(2)}` : '等待双手进入画面...');
+        }
+
+        /**
+         * @brief `计算手部信息`
+         * @param landmarks `21点关键点`
+         * @return `{ center_world, palm_size_norm, openness_ratio }`
+         */
+        function compute_hand_info(landmarks) {
+            // `中心点` 使用 `中指根部(9)`
+            const cx = (1.0 - landmarks[9].x) * 2.0 - 1.0;
+            const cy = -(landmarks[9].y * 2.0 - 1.0);
+            const center_world = new THREE.Vector3(cx * 10, cy * 10, 0);
+
+            // `掌大小` 使用 `腕(0)` 到 `中指根(9)` 距离
+            const palm_dx = landmarks[0].x - landmarks[9].x;
+            const palm_dy = landmarks[0].y - landmarks[9].y;
+            const palm_size = Math.sqrt(palm_dx * palm_dx + palm_dy * palm_dy);
+            const palm_size_norm = clamp((palm_size - 0.08) / (0.25 - 0.08), 0.0, 1.0);
+
+            // `张合判定`：指尖与指根相对腕的距离比较
+            const open_thumb = is_finger_open(landmarks, 4, 3);
+            const open_index = is_finger_open(landmarks, 8, 6);
+            const open_middle = is_finger_open(landmarks, 12, 10);
+            const open_ring = is_finger_open(landmarks, 16, 14);
+            const open_pinky = is_finger_open(landmarks, 20, 18);
+            const openness_ratio = (open_thumb + open_index + open_middle + open_ring + open_pinky) / 5.0;
+
+            return { center_world, palm_size_norm, openness_ratio };
+        }
+
+        /**
+         * @brief `判断某手指是否伸展`
+         * @param landmarks `关键点`
+         * @param tip_idx `指尖索引`
+         * @param pip_idx `指中节索引`
+         * @return `0 或 1`
+         */
+        function is_finger_open(landmarks, tip_idx, pip_idx) {
+            const d_tip = dist2(landmarks[tip_idx], landmarks[0]);
+            const d_pip = dist2(landmarks[pip_idx], landmarks[0]);
+            return d_tip > d_pip + 0.01 ? 1 : 0;
+        }
+
+        /**
+         * @brief `二维距离平方`
+         */
+        function dist2(a, b) {
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            return dx * dx + dy * dy;
+        }
+
+        /**
+         * @brief `主动画循环`
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+            update_particles();
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * @brief `更新粒子物理`
+         */
+        function update_particles() {
+            const positions = particle_geometry.attributes.position.array;
+            const now_ms = performance.now();
+            const dt = Math.max(0.016, (now_ms - last_time_ms) / 1000);
+            last_time_ms = now_ms;
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const idx = i * 3;
+
+                // `目标位置 = 心形 * 缩放 + 噪声 * 扩散`
+                const tx = base_shape_array[idx] * system_scale + noise_array[idx] * dispersion_factor;
+                const ty = base_shape_array[idx + 1] * system_scale + noise_array[idx + 1] * dispersion_factor;
+                const tz = base_shape_array[idx + 2] * system_scale + noise_array[idx + 2] * dispersion_factor;
+
+                // `当前位置与速度`
+                let px = positions[idx];
+                let py = positions[idx + 1];
+                let pz = positions[idx + 2];
+
+                let vx = vel_array[idx];
+                let vy = vel_array[idx + 1];
+                let vz = vel_array[idx + 2];
+
+                // `弹性加速度`
+                const ax = (tx - px) * STIFFNESS;
+                const ay = (ty - py) * STIFFNESS;
+                const az = (tz - pz) * STIFFNESS;
+
+                // `速度积分` (简化 `Euler`)
+                vx += ax * dt / 0.016;
+                vy += ay * dt / 0.016;
+                vz += az * dt / 0.016;
+
+                // `阻尼`
+                vx *= DAMPING;
+                vy *= DAMPING;
+                vz *= DAMPING;
+
+                // `位置更新`
+                px += vx;
+                py += vy;
+                pz += vz;
+
+                positions[idx] = px;
+                positions[idx + 1] = py;
+                positions[idx + 2] = pz;
+
+                vel_array[idx] = vx;
+                vel_array[idx + 1] = vy;
+                vel_array[idx + 2] = vz;
+            }
+
+            particle_geometry.attributes.position.needsUpdate = true;
+            particle_system.rotation.y += 0.001;
+            particle_system.rotation.z += 0.0006;
+        }
+
+        /**
+         * @brief `工具方法：截取范围`
+         */
+        function clamp(v, lo, hi) {
+            return Math.max(lo, Math.min(hi, v));
+        }
+
+        /**
+         * @brief `设置状态文本`
+         */
+        function set_status_text(text) {
+            const el = document.getElementById('status_text');
+            el.textContent = text;
+        }
+
+        // `启动入口`
+        init_main();
+    </script>
+</body>
+
+</html>

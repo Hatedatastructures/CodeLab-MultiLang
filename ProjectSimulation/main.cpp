@@ -78,9 +78,9 @@ int main()
     {
         // std::vector<std::string> logstrs;
         std::size_t total_bytes = 0;
-        for (int i = 0; i < 1000; ++i)
+        for (int i = 0; i < 10000; ++i)
         {
-            total_bytes += co_await logger.file_write("test.log", performance_log::timestamp() + "hello world " + std::to_string(i) + "\n");
+            total_bytes += co_await logger.file_write("test.log", performance_log::level::info,performance_log::timestamp() + "hello world " + std::to_string(i) + "\n");
             co_await logger.console_write(performance_log::level::info, "hello world " + std::to_string(i) + "\n");
             // logstrs.emplace_back("hello world" + std::to_string(i) + "\n");
         }
