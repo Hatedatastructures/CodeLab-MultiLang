@@ -71,17 +71,18 @@ namespace asio = boost::asio;
 #include <string>
 int main()
 {
+    namespace log = performance_log;
     asio::io_context io;
-    performance_log::coroutine_log logger(io.get_executor());
+    log::coroutine_log logger(io.get_executor());
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
     boost::asio::co_spawn(io, [&]() -> asio::awaitable<void>
     {
-        // std::vector<std::string> logstrs;
         std::size_t total_bytes = 0;
         for (int i = 0; i < 10000; ++i)
         {
-            total_bytes += co_await logger.file_write("test.log", performance_log::level::info,performance_log::timestamp() + "hello world " + std::to_string(i) + "\n");
-            co_await logger.console_write(performance_log::level::info, "hello world " + std::to_string(i) + "\n");
+            total_bytes += co_await logger.file_write_fmt("test.log", log::level::info,
+                "hello world " + std::to_string(i) + "\n");
+            co_await logger.console_write(log::level::info, "hello world " + std::to_string(i) + "\n");
             // logstrs.emplace_back("hello world" + std::to_string(i) + "\n");
         }
         std::cout << "total_bytes=" << total_bytes << std::endl;
@@ -92,22 +93,5 @@ int main()
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     std::cout << "time_ms=" << ms << std::endl;
     std::jthread t([&]() { io.run(); });
-
-    // asio::io_context io;
-    // namespace log = performance_log;
-    // log::initialize(io.get_executor());
-    // asio::co_spawn(io, [&]() -> asio::awaitable<void>
-    // {
-    //     // co_await log::FileLogMassage(log::level::info, "{}\n", "静态初始化完成");
-    //     co_await log::FileLogMassage("test.log", "[{}][{}]\n", std::chrono::system_clock::now(), "静态初始化完成");
-    //     co_await log::FileLogMassage("test.log", "[{}][{}]\n", std::chrono::system_clock::now(), "进入main函数");
-    //     co_return;
-    // }, asio::detached);
-    // std::jthread t([&]() { io.run(); });
-    // io.stop();
-    // log::shutdown();
-    // std::this_thread::sleep_for(std::chrono::seconds(20));
-
-    // std::cout << std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::system_clock::now()) << std::endl;
     return 0;
 }
