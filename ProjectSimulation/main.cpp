@@ -89,8 +89,8 @@ int main()
         // co_await logger.file_write("test.log", logstrs);
         co_return;
     }, asio::detached);
-    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+    const std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     std::cout << "time_ms=" << ms << std::endl;
     std::jthread t([&]() { io.run(); });
     return 0;

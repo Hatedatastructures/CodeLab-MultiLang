@@ -373,7 +373,6 @@ namespace performance_log
             co_return co_await console_write(log_level, data);
         }
 
-
     private:
         asio::any_io_executor event_executor;
         asio::strand<asio::any_io_executor> serial_exec;

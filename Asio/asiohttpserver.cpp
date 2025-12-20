@@ -391,5 +391,11 @@ int main()
         // std::cerr << "Server error: " << e.what() << std::endl;
         return 1;
     }
+    beast::http::request<http::string_body> request;
+    request.target("/");
+    request.method(http::verb::get);
+    request.version(11);
+    request.set(http::field::host, "localhost");
+    request.set(http::field::user_agent, "asio-http-server");
     return 0;
 }
