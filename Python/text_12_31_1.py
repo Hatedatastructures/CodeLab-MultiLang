@@ -1,5 +1,4 @@
 import ollama
-
 # 调用llava模型分析图像（替换为你的本地图像路径）
 response = ollama.chat(
     model='llava',
