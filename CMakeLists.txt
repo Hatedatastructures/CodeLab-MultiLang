@@ -1,84 +1,22 @@
-cmake_minimum_required(VERSION 3.68)
-project(C_and_Cplusplus)
+cmake_minimum_required(VERSION 3.28)
+project(CodeLabMultiLang LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD 11)
 
-include_directories(Asio)
-include_directories(Asio/model/concurrent)
-include_directories(Asio/model/container)
-include_directories(Asio/model/network)
-include_directories(Asio/model/network/agreement)
-include_directories(Asio/model/network/business)
-include_directories(Asio/model/network/crypt)
-include_directories(Asio/model/network/session)
-include_directories(Asio/model/sched)
+# Shared header include path
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/Include)
 
-add_executable(C_and_Cplusplus
-        Asio/model/concurrent/concurrent_annular_queue.hpp
-        Asio/model/concurrent/concurrent_array.hpp
-        Asio/model/concurrent/concurrent_bitset.hpp
-        Asio/model/concurrent/concurrent_deque.hpp
-        Asio/model/concurrent/concurrent_forward_list.hpp
-        Asio/model/concurrent/concurrent_list.hpp
-        Asio/model/concurrent/concurrent_map.hpp
-        Asio/model/concurrent/concurrent_multimap.hpp
-        Asio/model/concurrent/concurrent_multiset.hpp
-        Asio/model/concurrent/concurrent_priority_queue.hpp
-        Asio/model/concurrent/concurrent_queue.hpp
-        Asio/model/concurrent/concurrent_set.hpp
-        Asio/model/concurrent/concurrent_stack.hpp
-        Asio/model/concurrent/concurrent_string.hpp
-        Asio/model/concurrent/concurrent_unordered_map.hpp
-        Asio/model/concurrent/concurrent_unordered_multimap.hpp
-        Asio/model/concurrent/concurrent_unordered_multiset.hpp
-        Asio/model/concurrent/concurrent_unordered_set.hpp
-        Asio/model/concurrent/concurrent_vector.hpp
-        Asio/model/concurrent/container.hpp
-        Asio/model/container/container.hpp
-        Asio/model/container/simulate_algorithm.hpp
-        Asio/model/container/simulate_base.hpp
-        Asio/model/container/simulate_bloom.hpp
-        Asio/model/container/simulate_exception.hpp
-        Asio/model/container/simulate_hash.hpp
-        Asio/model/container/simulate_imitate.hpp
-        Asio/model/container/simulate_list.hpp
-        Asio/model/container/simulate_map.hpp
-        Asio/model/container/simulate_pointer.hpp
-        Asio/model/container/simulate_queue.hpp
-        Asio/model/container/simulate_set.hpp
-        Asio/model/container/simulate_stack.hpp
-        Asio/model/container/simulate_string.hpp
-        Asio/model/container/simulate_tree.hpp
-        Asio/model/container/simulate_utility.hpp
-        Asio/model/container/simulate_vector.hpp
-        Asio/model/network/agreement/auxiliary.hpp
-        Asio/model/network/agreement/conversion.hpp
-        Asio/model/network/agreement/http.hpp
-        Asio/model/network/agreement/json.hpp
-        Asio/model/network/agreement/protocol.hpp
-        Asio/model/network/business/forwarder.hpp
-        Asio/model/network/crypt/encryption.hpp
-        Asio/model/network/session/conversation.hpp
-        Asio/model/network/session/fundamental.hpp
-        Asio/model/network/network.hpp
-        Asio/model/sched/integration.hpp
-        Asio/model/sched/rank.hpp
-        Asio/model/sched/scheduling.hpp
-        Asio/model/sched/test.cpp
-        Asio/model/sched/thread_pool.hpp
-        Asio/model/sched/unit.hpp
-        Asio/model/sched/worker.hpp
-        Asio/model/test.cpp
-        C++20/gcm.cache/mymodule.gcm
-        C++20/output/format.exe
-        C++20/output/ranges.exe
-        C++20/coroutine.cpp
-        C++20/format.cpp
-        C++20/module.cpp
-        C++20/mymodule.cppm
-        C++20/mymodule.o
-        C++20/ranges.cpp
-        C++20/test.cpp
-        ProjectSimulation/CoroutineLog/CoroutineLog.hpp
-        ProjectSimulation/main.cpp
-        ProjectSimulation/main.cpp)
+# Add all subdirectories
+add_subdirectory(CBasics)
+add_subdirectory(Year2024)
+add_subdirectory(Year2025)
+add_subdirectory(Networking)
+add_subdirectory(LinuxProg)
+add_subdirectory(Cpp20Features)
+add_subdirectory(AiIntegration)
+add_subdirectory(QtApp)
+add_subdirectory(ProjectSimulationApp)
+add_subdirectory(ThirdPartyLibTest)
